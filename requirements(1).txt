@@ -1,9 +1,0 @@
-fastapi
-uvicorn
-langserve
-sse_starlette
-langgraph
-langchain-core
-langchain-google-genai
-google-generativeai
-pydantic
