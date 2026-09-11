@@ -12,6 +12,7 @@ from langchain_core.runnables import RunnableLambda
 from langchain_core.tools import tool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import StateGraph, START, END
+from pydantic import BaseModel, Field
 
 
 # ============================================================
@@ -227,40 +228,23 @@ rt_app = workflow.compile()
 # 6. LANGSERVE INPUT/OUTPUT ADAPTER
 # ============================================================
 
-def prepare_input(value):
-    """
-    Accept either:
-
-    {"input": "Write a Python program to check prime numbers"}
-
-    or directly:
-
-    {"messages": [...]}
-
-    LangServe uses this adapter before invoking the LangGraph app.
-    """
-    if isinstance(value, dict):
-        if "input" in value:
-            return {
-                "messages": [
-                    HumanMessage(content=str(value["input"]))
-                ]
-            }
-
-        if "messages" in value:
-            return value
-
-    if isinstance(value, str):
-        return {
-            "messages": [
-                HumanMessage(content=value)
-            ]
-        }
-
-    raise ValueError(
-        "Input must contain an 'input' string or a 'messages' list."
+# Define the precise input schema so the Playground can render it
+class AgentInput(BaseModel):
+    input: str = Field(
+        ..., 
+        description="The coding task you want the agent to perform."
     )
 
+def prepare_input(value: AgentInput):
+    """
+    Takes the validated AgentInput from LangServe and converts 
+    it into the state format expected by LangGraph.
+    """
+    return {
+        "messages": [
+            HumanMessage(content=value.input)
+        ]
+    }
 
 def prepare_output(state):
     """
@@ -276,9 +260,9 @@ def prepare_output(state):
         "report": state.get("report", ""),
     }
 
-
+# Explicitly attach the schema using .with_types()
 agent_api = (
-    RunnableLambda(prepare_input)
+    RunnableLambda(prepare_input).with_types(input_type=AgentInput)
     | rt_app
     | RunnableLambda(prepare_output)
 )
